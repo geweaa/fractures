@@ -43,6 +43,15 @@ cols.order <- c( # Sorted on abundance (descending)
   "Flavobacteriales" = "#FAEFD1",
   "Pseudomonadales" = "#046C9A",
   "Other" = "#899DA4"  
+) %>% rev()
+
+cols.rock <- c(
+  "Turbiditic greywackes" = "#046C9A", 
+  "Alum shale" = "#1B5331", 
+  "Imbricates: sandstone + conglomerate" = "#D69C4E", 
+  "Ignimbrite + porphyry" = "#972D15", 
+  "Dolerite" = "#A2A475",
+  "Ignimbrites + volcanic porphyries" = "#972D15"
 )
 ```
 
@@ -55,18 +64,16 @@ seqtab <- read_tsv("data/ASV_table.tsv", col_types = cols(.default = col_charact
 # Taxonomy
 gtdb <- read_tsv("data/ASV_tax.tsv", col_types = cols(.default = col_character()))
 # Metadata for plotting
-meta <- read_tsv("data/metadata.tsv", col_types = cols(.default = col_character()))
+meta <- read_tsv("data/metadata.tsv", col_types = cols(.default = col_character())) %>%
+  filter(sample != "P28309_1045")
+
+# Negative extraction control
+ncontrol <- seqtab %>% 
+  filter(sample == "P28309_1057_S57" | sample == "P28309_1049_S49") %>%
+  mutate(sample = gsub("_S[0-9].", "", sample))
 
 meta <- meta %>%
-  mutate(type = case_when(
-    grepl("mp", name) ~ "fluid",
-    grepl("bf", name) ~ "fracture",
-    .default = NA
-  )) %>% 
-  filter(!sample %in% c("P28309_1049","P28309_1057","P28309_1045")) %>% # Extraction controls
-  na.omit() %>%
-  mutate(depth = c(1268, 1270, 1311, 1537, 1605, 1608, 1669, 1268, 1311, 1537, 1605, 1608, 1669)) %>%
-  mutate(type = factor(type, levels = c("fracture", "fluid"))) %>%
+  mutate(type = factor(type, levels = c("fracture", "fluid", "control"))) %>%
   arrange(type)
 
 # Tidy ASV table
@@ -80,20 +87,44 @@ seqtab <- seqtab %>%
 # Biofilms (n = 7) included are 3, 4, 5, 8, 12, 13, and 17
 # Biofilm 3 and 4 share the mud pit sample
 fractures <- seqtab %>%
+  # Start with removing the ASVs in the negative extraction controls
+  # Removal of ASVs from drilling fluid (pairwise)
   filter(
     sample %in% c("P28309_1050","P28309_1051") & !seqid %in% seqtab[seqtab$sample == "P28309_1042",]$seqid |
       sample == "P28309_1052" & !seqid %in% seqtab[seqtab$sample == "P28309_1043",]$seqid |
       sample == "P28309_1053" & !seqid %in% seqtab[seqtab$sample == "P28309_1044",]$seqid |
       sample == "P28309_1054" & !seqid %in% seqtab[seqtab$sample == "P28309_1046",]$seqid |
       sample == "P28309_1055" & !seqid %in% seqtab[seqtab$sample == "P28309_1047",]$seqid |
-      sample == "P28309_1056" & !seqid %in% seqtab[seqtab$sample == "P28309_1048",]$seqid 
+      sample == "P28309_1056" & !seqid %in% seqtab[seqtab$sample == "P28309_1048",]$seqid
       ) 
+
+# Drilling fluid microscopy counts
+# 940 µl drilling fluid fixed with 60 µl 37% formaldehyde
+# Conversion factor microscopy for 5 x 5 raster: 36019.34
+# So one cell counted in the raster corresponds with: (cells per ml) (1 x 36019.34) / 0.94
+dfluid <- read_tsv("data/mudpit_counts.tsv", col_types = cols(.default = col_double(), coreid = col_character())
+                   )
+
+# Fluorescent microsphere counts
+# Core 1-16 with counts from the drilling fluid combined with the core sample
+# Core 17-50 with counts from the microsphere bag (before / after)
+# Cores 12-16 plus 32 with no bead count (in total n = 44)
+dfluid <- read_tsv("data/samples_log.tsv", 
+                   col_types = cols(.default = col_double(), 
+                                    coreid = col_character(), beads_core = col_character())
+                   ) %>% select(coreid, quenched = 4) %>%
+  mutate(coreid = paste0("C", coreid)) %>%
+  distinct() %>% na.omit() %>%
+  inner_join(dfluid, by = "coreid")
+
 
 # Add drilling fluid samples
 fractures <- seqtab %>%
+  filter(!seqid %in% ncontrol) %>% # Remove ASVs from the negative extraction control
   inner_join(meta, by = "sample") %>%
   filter(type == "fluid") %>% select(seqid, sample, count) %>%
-  rbind(fractures)
+  rbind(fractures) %>%
+  rbind(ncontrol)
 
 # Add relative abundance
 fractures <- fractures %>%
@@ -101,6 +132,38 @@ fractures <- fractures %>%
   mutate(relab = count / sum(count)) %>%
   ungroup()
 ```
+
+
+```{r logging}
+# Read raw data from ICDP
+# https://www.icdp-online.org/projects/by-continent/europe/cosc-sweden
+# Cite the operational data sets
+
+logging <- read_tsv("data/5054_2_A-Composite Log.asc", show_col_types = F) %>% 
+  select(depth = Depth, temp = Temp.MS) %>%
+  filter(depth != "m") %>%
+  mutate(temp = as.double(temp)) %>% filter(temp != -999.25) %>%
+  mutate(depth = as.double(depth))
+
+# Add lithology
+logging <- logging %>%
+  mutate(rock = case_when(
+    depth <= 780 ~ "Turbiditic greywackes",
+    depth > 780 & depth <= 825 ~ "Alum shale",
+    depth > 825 & depth <= 1250 ~ "Imbricates: sandstone + conglomerate",
+    depth > 1250 & depth <= 1600 ~ "Ignimbrite + porphyry",
+    depth > 1600 & depth <= 1930 ~ "Dolerite",
+    .default = "Ignimbrites + volcanic porphyries"
+  ))
+
+lithology <- list(depth = c(780, 45, 425, 350, 330, 346),
+                  rock = c("Turbiditic greywackes", "Alum shale",
+                  "Imbricates: sandstone + conglomerate", "Ignimbrite + porphyry",
+                  "Dolerite", "Ignimbrites + volcanic porphyries"))
+```
+
+### Fig. 1 ###
+
 
 ```{r nmds fractures unfiltered}
 set.seed(999)
@@ -122,17 +185,16 @@ p1 <- nmds.scores %>%
   geom_vline(xintercept = 0, linetype = 'dotted') +
   geom_hline(yintercept = 0, linetype = 'dotted') +
   # Points for samples, coloured by nature
-  geom_point(size = 3, stroke = 1) +
+  geom_point(size = 3) +
   theme_tidy() +
-  scale_shape(guide = "none") +
   ggrepel::geom_label_repel(aes(label = depth), color = "black",
                   box.padding = 0.4, label.padding = 0.1, 
                   max.overlaps = 10,
                   min.segment.length = 0.3,
                   size = 7/.pt) +
-  scale_shape_manual(values = c("fracture" = 17, "fluid" = 19), 
+ scale_shape_manual(values = c("fracture" = 17, "fluid" = 19, "control" = 4), 
                      name = "", guide = "none",
-                     labels = c("Fracture", "Drilling fluid")) +
+                     labels = c("Fracture", "Drilling fluid", "Neg. control")) +
   annotate('text', x = -Inf, y = -Inf, size = 7/.pt, 
            label = paste('Stress = ', round(nmds$stress, digits = 2)),
            hjust = -0.1, vjust = -1,
@@ -152,13 +214,14 @@ nmds.scores <- vegan::scores(nmds)$sites %>%
   inner_join(meta, by = "sample")
 ```
 
+
 ```{r plot nmds filtered, include = T}
 p2 <- nmds.scores %>%
   ggplot(aes(NMDS1, NMDS2, shape = type)) +
   geom_vline(xintercept = 0, linetype = 'dotted') +
   geom_hline(yintercept = 0, linetype = 'dotted') +
   stat_ellipse(aes(x = NMDS1, y = NMDS2, colour = type), 
-               geom = "polygon", show.legend = F,
+               geom = "polygon", show.legend = F, level = 0.85,
                fill = NA, linetype = "dashed") +  
   # Points for samples, coloured by nature
   geom_point(size = 3) +
@@ -168,9 +231,9 @@ p2 <- nmds.scores %>%
                   max.overlaps = 10,
                   min.segment.length = 0.3,
                   size = 7/.pt) +
-  scale_shape_manual(values = c("fracture" = 17, "fluid" = 19), 
+  scale_shape_manual(values = c("fracture" = 17, "fluid" = 19, "control" = 4), 
                      name = "",
-                     labels = c("Fracture", "Drilling fluid")) +
+                     labels = c("Fracture", "Drilling fluid", "Neg. control")) +
   scale_color_manual(values = c(fracture = "#00A08A", fluid = "#D8B70A"), guide = "none") +
   annotate('text', x = -Inf, y = -Inf, size = 7/.pt, 
            label = paste('Stress = ', round(nmds$stress, digits = 2)),
@@ -182,17 +245,18 @@ p2 <- nmds.scores %>%
 
 ```{r merge ordination plots}
 library(patchwork)
-p1 + p2 + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+p1 + p2 + plot_layout(guides = "collect") & 
+  theme(legend.position = "bottom")
 ```
+
+
 ```{r export ordination}
-ggsave("figures/nmds_fractures.pdf", width = 17, height = 8, units = "cm")
+ggsave("figures/nmds_fractures.pdf", width = 17, height = 10, units = "cm")
 ```
 
 
 ```{r communities order}
-i <- paste("P28309_10", 
-           c("50","51","52","53","54","55","56","42","43","44","46","47","48"),
-           sep = "")
+i <- meta %>% pull(sample)
 
 fractures %>%
   inner_join(gtdb, by = "seqid") %>%
@@ -232,8 +296,10 @@ fractures %>%
   scale_fill_manual(values = cols.order) +
   annotate("segment", x =  0.55, xend =   7.45, y = 101, yend = 101) +
   annotate("segment", x =  7.55, xend =  13.45, y = 101, yend = 101) +
+  annotate("segment", x = 13.55, xend =  15.45, y = 101, yend = 101) +
   annotate('text', x =  3.95, y = 104, size = 7 / .pt, label = "Fractures") +
   annotate('text', x = 10.45, y = 104, size = 7 / .pt, label = "Drilling fluid") +
+  annotate('text', x = 14.45, y = 104, size = 7 / .pt, label = "Neg. controls") +
   theme_tidy(ratio = 0.7) + 
   theme(
     axis.text.x = element_blank(),
@@ -243,7 +309,118 @@ fractures %>%
     )
 ```
 
+
 ```{r export bar plot}
-ggsave("figures/cosc_fractures.pdf", width = 14, height = 8, units = "cm")
+ggsave("figures/cosc_fractures.pdf", width = 16, height = 10, units = "cm")
 ```
 
+
+```{r}
+seqtab %>%
+  inner_join(meta[,c("sample","type")], by = "sample") %>% 
+  spread(seqid, count, fill = 0) %>%
+  column_to_rownames("sample") -> t
+
+set.seed(999)
+vegan::adonis2(t[,c(-1)] ~ type, data = t)
+
+fractures %>%
+  select(-relab) %>%
+  inner_join(meta[,c("sample","type")], by = "sample") %>% 
+  spread(seqid, count, fill = 0) %>%
+  column_to_rownames("sample") -> t
+
+set.seed(111)
+vegan::adonis2(t[,c(-1)] ~ type, data = t)
+
+```
+
+
+### Fig. 2 ###
+
+
+```{r fig.1}
+p1 <- logging %>%
+  mutate(depth = depth / 1000) %>% # Depth in km
+  ggplot(aes(temp, depth)) +
+  geom_line() + scale_y_reverse() + scale_x_continuous(position = "top") +
+  labs(x = "Temperature (°C)", y = "Depth (km)") +
+  theme_tidy(ratio = 2) +
+  theme(
+    panel.border = element_blank(),
+    axis.line = element_line(),
+    panel.grid.major.y = element_line(colour = "grey", linetype = "dotted", linewidth = 0.4)
+  )
+```
+
+
+```{r}
+p2 <- lithology %>%
+  data.frame() %>%
+  mutate(sample = "hi") %>%
+  mutate(depth = depth / 1000) %>% # Depth in km
+  mutate(rock = factor(rock, rev(names(cols.rock)))) %>%
+  ggplot(aes(sample, depth, fill = rock)) +
+  geom_col() + scale_y_reverse() + scale_x_discrete(position = "top") +
+  labs(x = "Lithology", y = "", fill = "") +
+  theme_tidy(ratio = 6) + 
+  guides(fill = guide_legend(reverse = T)) +
+  scale_fill_manual(values = cols.rock) + 
+  annotate("text", x = 1.5, y = 1.268, label = "-") +
+  annotate("text", x = 1.5, y = 1.270, label = "-") +
+  annotate("text", x = 1.5, y = 1.311, label = "-") +
+  annotate("text", x = 1.5, y = 1.537, label = "-") +
+  annotate("text", x = 1.5, y = 1.605, label = "-") +
+  annotate("text", x = 1.5, y = 1.608, label = "-") +
+  annotate("text", x = 1.5, y = 1.669, label = "-") +
+  theme(
+    panel.border = element_blank(),
+    axis.line.x = element_line(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+    )
+```
+
+
+```{r}
+# Äspö Lat N 57.4334, Lon E 16.6603) 
+baltic <- list.files("../../Cultures/didactic-spork/data/shapefiles/", pattern = ".shp", full.names = TRUE) %>% lapply(sf::st_read)
+# Use EPSG 3152, unit (m)
+baltic[[3]] <- baltic[[3]] %>% sf::st_transform(3152)
+baltic[[6]] <- baltic[[6]] %>% sf::st_transform(3152)
+baltic[[7]] <- baltic[[7]] %>% sf::st_transform(3152)
+
+ggplot() + # x (longitude), y (latitude)
+  geom_sf(data = baltic[[3]], colour = "black", fill = "white", lwd = 0.08) + # Finland
+  geom_sf(data = baltic[[6]], colour = "black", fill = "white", lwd = 0.08) + # Norway
+  geom_sf(data = baltic[[7]], colour = "black", fill = "white", lwd = 0.08) + # Sweden
+  ggspatial::annotation_scale(location = "br") +
+  annotate("rect", xmin = -126780 - 20000, xmax = -126780 + 20000, ymin = 530561 - 20000, ymax = 530561 + 20000, fill = "black" 
+           ) +
+  annotate("text", x = -126780 + 110000, y = 530561, label = "COSC-2", colour = "black", size = 7/.pt) +
+  lims(x = c(-605927, 377430), y = c(-300000, 1172471)) +
+  labs(x = "", y = "") + 
+  theme(
+    panel.grid = element_line(colour = "#D9D9D9", linewidth = 0.4),
+    panel.background = element_blank(),
+    axis.text = element_text(size = 7, color = "black"),
+    axis.ticks = element_blank()
+    )
+```
+
+```{r}
+ggsave("coscmap.png", width = 8, height = 8, units = "cm")
+```
+
+
+
+```{r}
+library(patchwork)
+p1 + p2 & theme(legend.position = "none")
+```
+```{r}
+ggsave("logging_nolgend.pdf", width = 8, height = 10, units = "cm")
+```
