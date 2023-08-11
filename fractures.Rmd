@@ -102,20 +102,13 @@ fractures <- seqtab %>%
 # 940 µl drilling fluid fixed with 60 µl 37% formaldehyde
 # Conversion factor microscopy for 5 x 5 raster: 36019.34
 # So one cell counted in the raster corresponds with: (cells per ml) (1 x 36019.34) / 0.94
-dfluid <- read_tsv("data/mudpit_counts.tsv", col_types = cols(.default = col_double(), coreid = col_character())
+dfluid <- read_tsv("data/contamination.tsv", col_types = cols(.default = col_double(), coreid = col_character())
                    )
 
 # Fluorescent microsphere counts
 # Core 1-16 with counts from the drilling fluid combined with the core sample
 # Core 17-50 with counts from the microsphere bag (before / after)
 # Cores 12-16 plus 32 with no bead count (in total n = 44)
-dfluid <- read_tsv("data/samples_log.tsv", 
-                   col_types = cols(.default = col_double(), 
-                                    coreid = col_character(), beads_core = col_character())
-                   ) %>% select(coreid, quenched = 4) %>%
-  mutate(coreid = paste0("C", coreid)) %>%
-  distinct() %>% na.omit() %>%
-  inner_join(dfluid, by = "coreid")
 
 
 # Add drilling fluid samples
@@ -162,7 +155,7 @@ lithology <- list(depth = c(780, 45, 425, 350, 330, 346),
                   "Dolerite", "Ignimbrites + volcanic porphyries"))
 ```
 
-### Fig. 1 ###
+### Fig. 3 ###
 
 
 ```{r nmds fractures unfiltered}
@@ -234,7 +227,7 @@ p2 <- nmds.scores %>%
   scale_shape_manual(values = c("fracture" = 17, "fluid" = 19, "control" = 4), 
                      name = "",
                      labels = c("Fracture", "Drilling fluid", "Neg. control")) +
-  scale_color_manual(values = c(fracture = "#00A08A", fluid = "#D8B70A"), guide = "none") +
+  scale_color_manual(values = c(fracture = "#D69C4E", fluid = "#A2A475"), guide = "none") +
   annotate('text', x = -Inf, y = -Inf, size = 7/.pt, 
            label = paste('Stress = ', round(nmds$stress, digits = 2)),
            hjust = -0.1, vjust = -1,
@@ -243,7 +236,7 @@ p2 <- nmds.scores %>%
 ```
 
 
-```{r merge ordination plots}
+```{r merge ordination plots, fig.width=18/2.53}
 library(patchwork)
 p1 + p2 + plot_layout(guides = "collect") & 
   theme(legend.position = "bottom")
@@ -300,7 +293,7 @@ fractures %>%
   annotate('text', x =  3.95, y = 104, size = 7 / .pt, label = "Fractures") +
   annotate('text', x = 10.45, y = 104, size = 7 / .pt, label = "Drilling fluid") +
   annotate('text', x = 14.45, y = 104, size = 7 / .pt, label = "Neg. controls") +
-  theme_tidy(ratio = 0.7) + 
+  theme_tidy(ratio = 0.8, legend = "bottom") + guides(fill = guide_legend(ncol = 3)) +
   theme(
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank(),
@@ -311,11 +304,11 @@ fractures %>%
 
 
 ```{r export bar plot}
-ggsave("figures/cosc_fractures.pdf", width = 16, height = 10, units = "cm")
+ggsave("figures/cosc_fractures.pdf", width = 12, height = 12, units = "cm")
 ```
 
 
-```{r}
+```{r stat beta diversity}
 seqtab %>%
   inner_join(meta[,c("sample","type")], by = "sample") %>% 
   spread(seqid, count, fill = 0) %>%
@@ -336,10 +329,10 @@ vegan::adonis2(t[,c(-1)] ~ type, data = t)
 ```
 
 
-### Fig. 2 ###
+### Fig. 1 ###
 
 
-```{r fig.1}
+```{r plot depth profile}
 p1 <- logging %>%
   mutate(depth = depth / 1000) %>% # Depth in km
   ggplot(aes(temp, depth)) +
@@ -354,7 +347,7 @@ p1 <- logging %>%
 ```
 
 
-```{r}
+```{r plot lithology}
 p2 <- lithology %>%
   data.frame() %>%
   mutate(sample = "hi") %>%
@@ -385,7 +378,7 @@ p2 <- lithology %>%
 ```
 
 
-```{r}
+```{r plot scandinavia}
 # Äspö Lat N 57.4334, Lon E 16.6603) 
 baltic <- list.files("../../Cultures/didactic-spork/data/shapefiles/", pattern = ".shp", full.names = TRUE) %>% lapply(sf::st_read)
 # Use EPSG 3152, unit (m)
@@ -411,16 +404,59 @@ ggplot() + # x (longitude), y (latitude)
     )
 ```
 
-```{r}
+```{r export map}
 ggsave("coscmap.png", width = 8, height = 8, units = "cm")
 ```
 
 
 
-```{r}
+```{r plot fig. 1b}
 library(patchwork)
 p1 + p2 & theme(legend.position = "none")
 ```
-```{r}
-ggsave("logging_nolgend.pdf", width = 8, height = 10, units = "cm")
+```{r export fig. 1b}
+ggsave("fig1b.pdf", width = 8, height = 10, units = "cm")
 ```
+
+
+### Fig. 2 ###
+
+```{r, fig.height=8/2.54, fig.width=8/2.54}
+p1 <- dfluid %>%
+  ggplot(aes(depth, cells)) +
+  geom_point() + scale_y_log10() +
+  labs(x = "Core depth (m)", y = expression("Cells in drilling fluid (ml"^"-1"*")")) +
+  theme_tidy()
+
+p2 <- dfluid %>%
+  ggplot(aes(depth, quenched)) +
+  geom_point() +
+  geom_vline(xintercept = 750, linetype = "dotted") +
+  labs(x = "Core depth (m)", y = "Fraction of beads quenced") +
+  annotate("text", x = 350, y = 0.925, 
+           label = "Beads added\nto drilling fluid", 
+           size = 7/.pt) +
+  annotate("text", x = 1200, y = 0.925, 
+           label = "Core immersed\nin bead bath", 
+           size = 7/.pt) +
+  theme_tidy()
+
+p3 <- dfluid %>%
+  mutate(left = (1-quenched) * cells) %>%
+  ggplot(aes(depth, left)) +
+  geom_point() +
+  geom_vline(xintercept = 750, linetype = "dotted") +
+  labs(x = "Core depth (m)", y = expression("Cells left from drilling fluid (ml"^"-1"*")")) +
+  theme_tidy()
+```
+
+
+```{r, fig.width=18/2.53}
+library(patchwork)
+p1 + p2 + p3 + plot_annotation(tag_levels = c("a","b","c")) & 
+  theme(plot.tag.position = "top")
+```
+```{r export fig. 2}
+ggsave("figures/mudpit.pdf", height = 14, width = 14, units = "cm")
+```
+
