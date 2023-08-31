@@ -9,11 +9,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="George" />
+<meta name="author" content="George Westmeijer" />
 
 <meta name="date" content="2023-03-17" />
 
-<title>fractures</title>
+<title>Continental scientific drilling and microbiology: (extremely) low biomass in crystalline bedrock of central Sweden</title>
 
 <script src="fractures_files/jquery-3.6.0/jquery-3.6.0.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -251,14 +251,15 @@ div.tocify {
 
 
 
-<h1 class="title toc-ignore">fractures</h1>
-<h4 class="author">George</h4>
+<h1 class="title toc-ignore">Continental scientific drilling and microbiology: (extremely) low biomass in crystalline bedrock of central Sweden</h1>
+<h4 class="author">George Westmeijer</h4>
 <h4 class="date">2023-03-17</h4>
 
 </div>
 
 
-<pre class="r"><code>library(tidyverse)</code></pre>
+<pre class="r"><code>knitr::opts_chunk$set(cache = TRUE)
+library(tidyverse)</code></pre>
 <pre><code>## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
 ## ✔ dplyr     1.1.2     ✔ readr     2.1.4
 ## ✔ forcats   1.0.0     ✔ stringr   1.5.0
@@ -293,6 +294,15 @@ cols.order &lt;- c( # Sorted on abundance (descending)
   &quot;Flavobacteriales&quot; = &quot;#FAEFD1&quot;,
   &quot;Pseudomonadales&quot; = &quot;#046C9A&quot;,
   &quot;Other&quot; = &quot;#899DA4&quot;  
+) %&gt;% rev()
+
+cols.rock &lt;- c(
+  &quot;Turbiditic greywackes&quot; = &quot;#046C9A&quot;, 
+  &quot;Alum shale&quot; = &quot;#1B5331&quot;, 
+  &quot;Imbricates: sandstone + conglomerate&quot; = &quot;#D69C4E&quot;, 
+  &quot;Ignimbrite + porphyry&quot; = &quot;#972D15&quot;, 
+  &quot;Dolerite&quot; = &quot;#A2A475&quot;,
+  &quot;Ignimbrites + volcanic porphyries&quot; = &quot;#972D15&quot;
 )</code></pre>
 <pre class="r"><code># GTDB release 207 was used as reference database
 
@@ -301,18 +311,16 @@ seqtab &lt;- read_tsv(&quot;data/ASV_table.tsv&quot;, col_types = cols(.default 
 # Taxonomy
 gtdb &lt;- read_tsv(&quot;data/ASV_tax.tsv&quot;, col_types = cols(.default = col_character()))
 # Metadata for plotting
-meta &lt;- read_tsv(&quot;data/metadata.tsv&quot;, col_types = cols(.default = col_character()))
+meta &lt;- read_tsv(&quot;data/metadata.tsv&quot;, col_types = cols(.default = col_character())) %&gt;%
+  filter(sample != &quot;P28309_1045&quot;)
+
+# Negative extraction control
+ncontrol &lt;- seqtab %&gt;% 
+  filter(sample == &quot;P28309_1057_S57&quot; | sample == &quot;P28309_1049_S49&quot;) %&gt;%
+  mutate(sample = gsub(&quot;_S[0-9].&quot;, &quot;&quot;, sample))
 
 meta &lt;- meta %&gt;%
-  mutate(type = case_when(
-    grepl(&quot;mp&quot;, name) ~ &quot;fluid&quot;,
-    grepl(&quot;bf&quot;, name) ~ &quot;fracture&quot;,
-    .default = NA
-  )) %&gt;% 
-  filter(!sample %in% c(&quot;P28309_1049&quot;,&quot;P28309_1057&quot;,&quot;P28309_1045&quot;)) %&gt;% # Extraction controls
-  na.omit() %&gt;%
-  mutate(depth = c(1268, 1270, 1311, 1537, 1605, 1608, 1669, 1268, 1311, 1537, 1605, 1608, 1669)) %&gt;%
-  mutate(type = factor(type, levels = c(&quot;fracture&quot;, &quot;fluid&quot;))) %&gt;%
+  mutate(type = factor(type, levels = c(&quot;fracture&quot;, &quot;fluid&quot;, &quot;control&quot;))) %&gt;%
   arrange(type)
 
 # Tidy ASV table
@@ -322,69 +330,276 @@ seqtab &lt;- seqtab %&gt;%
 <pre class="r"><code># Biofilms (n = 7) included are 3, 4, 5, 8, 12, 13, and 17
 # Biofilm 3 and 4 share the mud pit sample
 fractures &lt;- seqtab %&gt;%
+  # Start with removing the ASVs in the negative extraction controls
+  filter(!seqid %in% ncontrol) %&gt;%
+  # Removal of ASVs from drilling fluid (pairwise)
   filter(
     sample %in% c(&quot;P28309_1050&quot;,&quot;P28309_1051&quot;) &amp; !seqid %in% seqtab[seqtab$sample == &quot;P28309_1042&quot;,]$seqid |
       sample == &quot;P28309_1052&quot; &amp; !seqid %in% seqtab[seqtab$sample == &quot;P28309_1043&quot;,]$seqid |
       sample == &quot;P28309_1053&quot; &amp; !seqid %in% seqtab[seqtab$sample == &quot;P28309_1044&quot;,]$seqid |
       sample == &quot;P28309_1054&quot; &amp; !seqid %in% seqtab[seqtab$sample == &quot;P28309_1046&quot;,]$seqid |
       sample == &quot;P28309_1055&quot; &amp; !seqid %in% seqtab[seqtab$sample == &quot;P28309_1047&quot;,]$seqid |
-      sample == &quot;P28309_1056&quot; &amp; !seqid %in% seqtab[seqtab$sample == &quot;P28309_1048&quot;,]$seqid 
+      sample == &quot;P28309_1056&quot; &amp; !seqid %in% seqtab[seqtab$sample == &quot;P28309_1048&quot;,]$seqid
       ) 
+
+# Drilling fluid microscopy counts
+# 940 µl drilling fluid fixed with 60 µl 37% formaldehyde
+# Conversion factor microscopy for 5 x 5 raster: 36019.34
+# So one cell counted in the raster corresponds with: (cells per ml) (1 x 36019.34) / 0.94
+dfluid &lt;- read_tsv(&quot;data/contamination.tsv&quot;, col_types = cols(.default = col_double(), coreid = col_character())
+                   )
+
+# Fluorescent microsphere counts
+# Core 1-16 with counts from the drilling fluid combined with the core sample
+# Core 17-50 with counts from the microsphere bag (before / after)
+# Cores 12-16 plus 32 with no bead count (in total n = 44)
+
 
 # Add drilling fluid samples
 fractures &lt;- seqtab %&gt;%
   inner_join(meta, by = &quot;sample&quot;) %&gt;%
   filter(type == &quot;fluid&quot;) %&gt;% select(seqid, sample, count) %&gt;%
-  rbind(fractures)
-
-# Add relative abundance
-fractures &lt;- fractures %&gt;%
+  rbind(fractures) %&gt;%
+  rbind(ncontrol) %&gt;%
+  # Add relative abundance
   group_by(sample) %&gt;% 
   mutate(relab = count / sum(count)) %&gt;%
   ungroup()</code></pre>
+<div id="fig.-1" class="section level1" number="1">
+<h1><span class="header-section-number">1</span> Fig. 1</h1>
+<pre class="r"><code># Read raw data from ICDP
+# https://www.icdp-online.org/projects/by-continent/europe/cosc-sweden
+# Cite the operational data sets
+
+logging &lt;- read_tsv(&quot;data/5054_2_A-Composite Log.asc&quot;, show_col_types = F) %&gt;% 
+  select(depth = Depth, temp = Temp.MS) %&gt;%
+  filter(depth != &quot;m&quot;) %&gt;%
+  mutate(temp = as.double(temp)) %&gt;% filter(temp != -999.25) %&gt;%
+  mutate(depth = as.double(depth))
+
+# Add lithology
+logging &lt;- logging %&gt;%
+  mutate(rock = case_when(
+    depth &lt;= 780 ~ &quot;Turbiditic greywackes&quot;,
+    depth &gt; 780 &amp; depth &lt;= 825 ~ &quot;Alum shale&quot;,
+    depth &gt; 825 &amp; depth &lt;= 1250 ~ &quot;Imbricates: sandstone + conglomerate&quot;,
+    depth &gt; 1250 &amp; depth &lt;= 1600 ~ &quot;Ignimbrite + porphyry&quot;,
+    depth &gt; 1600 &amp; depth &lt;= 1930 ~ &quot;Dolerite&quot;,
+    .default = &quot;Ignimbrites + volcanic porphyries&quot;
+  ))</code></pre>
+<pre class="r"><code>p1 &lt;- logging %&gt;%
+  mutate(depth = depth / 1000) %&gt;% # Depth in km
+  ggplot(aes(temp, depth)) +
+  geom_line() + 
+  scale_y_reverse(breaks = c(0, 0.5, 1, 1.5, 2, 2.273), labels = c(&quot;0&quot;,&quot;0.5&quot;,&quot;1.0&quot;,&quot;1.5&quot;,&quot;2.0&quot;,&quot;2.273&quot;)) + 
+  scale_x_continuous(position = &quot;top&quot;) +
+  labs(x = &quot;Temperature (°C)&quot;, y = &quot;Depth (km)&quot;) +
+  theme_tidy(ratio = 2.5) +
+  theme(
+    axis.ticks.y = element_blank(),
+    panel.border = element_blank(),
+    axis.line = element_line(),
+    panel.grid.major.y = element_line(colour = &quot;grey&quot;, linetype = &quot;dotted&quot;, linewidth = 0.4)
+  )</code></pre>
+<pre class="r"><code>i &lt;- list(start = 0.6, end = 1.5, depth = c(.176,.953,1.268,1.270,1.311,1.448,1.537,
+                                       1.549,1.602,1.670,1.686,1.746,1.780,1.799,
+                                       1.800,1.819,1.849)) %&gt;% data.frame()
+
+lithology &lt;- list(depth = c(780, 45, 425, 350, 330, 346), type = &quot;Lithology&quot;,
+                  rock = c(&quot;Turbiditic greywackes&quot;, &quot;Alum shale&quot;,
+                           &quot;Imbricates: sandstone + conglomerate&quot;, &quot;Ignimbrite + porphyry&quot;,
+                           &quot;Dolerite&quot;, &quot;Ignimbrites + volcanic porphyries&quot;)
+                  ) %&gt;% data.frame()
+
+p2 &lt;- lithology %&gt;%
+  mutate(depth = depth / 1000) %&gt;% # Depth in km
+  mutate(rock = factor(rock, rev(names(cols.rock)))) %&gt;%
+  ggplot(aes(type, depth, fill = rock)) +
+  geom_col() + scale_y_reverse() + scale_x_discrete(position = &quot;top&quot;) +
+  labs(x = &quot;Lithology&quot;, y = &quot;&quot;, fill = &quot;&quot;) +
+  theme_tidy(ratio = 6) + 
+  guides(fill = guide_legend(reverse = T)) +
+  scale_fill_manual(values = cols.rock) +
+  geom_segment(data = i, aes(x = start, xend = end, y = depth, yend = depth), inherit.aes = F) +
+  theme(
+    panel.border = element_blank(),
+    axis.line.x = element_line(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+    )</code></pre>
+<pre class="r"><code># Äspö Lat N 57.4334, Lon E 16.6603) 
+baltic &lt;- list.files(&quot;../../Cultures/didactic-spork/data/shapefiles/&quot;, pattern = &quot;.shp&quot;, full.names = TRUE) %&gt;% lapply(sf::st_read)</code></pre>
+<pre><code>## Reading layer `DNK_adm0&#39; from data source 
+##   `/Users/geweaa/Box Sync/Cultures/didactic-spork/data/shapefiles/DNK_adm0.shp&#39; 
+##   using driver `ESRI Shapefile&#39;
+## Simple feature collection with 1 feature and 70 fields
+## Geometry type: MULTIPOLYGON
+## Dimension:     XY
+## Bounding box:  xmin: 8.076389 ymin: 54.55903 xmax: 15.19306 ymax: 57.75153
+## Geodetic CRS:  WGS 84
+## Reading layer `EST_adm0&#39; from data source 
+##   `/Users/geweaa/Box Sync/Cultures/didactic-spork/data/shapefiles/EST_adm0.shp&#39; 
+##   using driver `ESRI Shapefile&#39;
+## Simple feature collection with 1 feature and 70 fields
+## Geometry type: MULTIPOLYGON
+## Dimension:     XY
+## Bounding box:  xmin: 21.76431 ymin: 57.51395 xmax: 28.20904 ymax: 59.82202
+## Geodetic CRS:  WGS 84
+## Reading layer `FIN_adm0&#39; from data source 
+##   `/Users/geweaa/Box Sync/Cultures/didactic-spork/data/shapefiles/FIN_adm0.shp&#39; 
+##   using driver `ESRI Shapefile&#39;
+## Simple feature collection with 1 feature and 70 fields
+## Geometry type: MULTIPOLYGON
+## Dimension:     XY
+## Bounding box:  xmin: 20.55121 ymin: 59.72097 xmax: 31.5828 ymax: 70.09145
+## Geodetic CRS:  WGS 84
+## Reading layer `LTU_adm0&#39; from data source 
+##   `/Users/geweaa/Box Sync/Cultures/didactic-spork/data/shapefiles/LTU_adm0.shp&#39; 
+##   using driver `ESRI Shapefile&#39;
+## Simple feature collection with 1 feature and 70 fields
+## Geometry type: MULTIPOLYGON
+## Dimension:     XY
+## Bounding box:  xmin: 20.9506 ymin: 53.89011 xmax: 26.84722 ymax: 56.44703
+## Geodetic CRS:  WGS 84
+## Reading layer `LVA_adm0&#39; from data source 
+##   `/Users/geweaa/Box Sync/Cultures/didactic-spork/data/shapefiles/LVA_adm0.shp&#39; 
+##   using driver `ESRI Shapefile&#39;
+## Simple feature collection with 1 feature and 70 fields
+## Geometry type: POLYGON
+## Dimension:     XY
+## Bounding box:  xmin: 20.97139 ymin: 55.66372 xmax: 28.24051 ymax: 58.08557
+## Geodetic CRS:  WGS 84
+## Reading layer `NOR_adm0&#39; from data source 
+##   `/Users/geweaa/Box Sync/Cultures/didactic-spork/data/shapefiles/NOR_adm0.shp&#39; 
+##   using driver `ESRI Shapefile&#39;
+## Simple feature collection with 1 feature and 70 fields
+## Geometry type: MULTIPOLYGON
+## Dimension:     XY
+## Bounding box:  xmin: 3.904688 ymin: 57.95903 xmax: 31.16198 ymax: 71.18125
+## Geodetic CRS:  WGS 84
+## Reading layer `SWE_adm0&#39; from data source 
+##   `/Users/geweaa/Box Sync/Cultures/didactic-spork/data/shapefiles/SWE_adm0.shp&#39; 
+##   using driver `ESRI Shapefile&#39;
+## Simple feature collection with 1 feature and 70 fields
+## Geometry type: MULTIPOLYGON
+## Dimension:     XY
+## Bounding box:  xmin: 10.96139 ymin: 55.33625 xmax: 24.1724 ymax: 69.05904
+## Geodetic CRS:  WGS 84
+## Reading layer `World_Seas_IHO_v3&#39; from data source 
+##   `/Users/geweaa/Box Sync/Cultures/didactic-spork/data/shapefiles/World_Seas_IHO_v3.shp&#39; 
+##   using driver `ESRI Shapefile&#39;
+## Simple feature collection with 101 features and 10 fields
+## Geometry type: MULTIPOLYGON
+## Dimension:     XY
+## Bounding box:  xmin: -180 ymin: -85.5625 xmax: 180 ymax: 90
+## Geodetic CRS:  WGS 84</code></pre>
+<pre class="r"><code># Use EPSG 3152, unit (m)
+baltic[[3]] &lt;- baltic[[3]] %&gt;% sf::st_transform(3152)
+baltic[[6]] &lt;- baltic[[6]] %&gt;% sf::st_transform(3152)
+baltic[[7]] &lt;- baltic[[7]] %&gt;% sf::st_transform(3152)
+
+ggplot() + # x (longitude), y (latitude)
+  geom_sf(data = baltic[[3]], colour = &quot;black&quot;, fill = &quot;white&quot;, lwd = 0.08) + # Finland
+  geom_sf(data = baltic[[6]], colour = &quot;black&quot;, fill = &quot;white&quot;, lwd = 0.08) + # Norway
+  geom_sf(data = baltic[[7]], colour = &quot;black&quot;, fill = &quot;white&quot;, lwd = 0.08) + # Sweden
+  ggspatial::annotation_scale(location = &quot;br&quot;) +
+  annotate(&quot;rect&quot;, xmin = -126780 - 20000, xmax = -126780 + 20000, ymin = 530561 - 20000, ymax = 530561 + 20000, fill = &quot;black&quot; 
+           ) +
+  annotate(&quot;text&quot;, x = -126780 + 110000, y = 530561, label = &quot;COSC-2&quot;, colour = &quot;black&quot;, size = 7/.pt) +
+  lims(x = c(-605927, 377430), y = c(-300000, 1172471)) +
+  labs(x = &quot;&quot;, y = &quot;&quot;) + 
+  theme(
+    panel.grid = element_line(colour = &quot;#D9D9D9&quot;, linewidth = 0.4),
+    panel.background = element_blank(),
+    axis.text = element_text(size = 7, color = &quot;black&quot;),
+    axis.ticks = element_blank()
+    )</code></pre>
+<p><img src="fractures_files/figure-html/plot%20scandinavia-1.png" width="672" /></p>
+<pre class="r"><code>ggsave(&quot;figures/coscmap.png&quot;, width = 8, height = 8, units = &quot;cm&quot;)</code></pre>
+<pre class="r"><code>library(patchwork)
+p1 + p2 &amp; theme(legend.position = &quot;none&quot;)</code></pre>
+<p><img src="fractures_files/figure-html/plot%20fig.%201b-1.png" width="672" /></p>
+<pre class="r"><code>ggsave(&quot;figures/lithology.pdf&quot;, width = 8, height = 10, units = &quot;cm&quot;)</code></pre>
+</div>
+<div id="fig.-2" class="section level1" number="2">
+<h1><span class="header-section-number">2</span> Fig. 2</h1>
+<pre class="r"><code>p1 &lt;- dfluid %&gt;%
+  ggplot(aes(depth, cells)) +
+  geom_point() + scale_y_log10() +
+  labs(x = &quot;Core depth (m)&quot;, y = expression(&quot;Cells in drilling fluid (ml&quot;^&quot;-1&quot;*&quot;)&quot;)) +
+  theme_tidy()
+
+p2 &lt;- dfluid %&gt;%
+  ggplot(aes(depth, quenched)) +
+  geom_point() +
+  geom_vline(xintercept = 750, linetype = &quot;dotted&quot;) +
+  labs(x = &quot;Core depth (m)&quot;, y = &quot;Fraction of beads quenced&quot;) +
+  annotate(&quot;text&quot;, x = 350, y = 0.925, 
+           label = &quot;Beads added\nto drilling fluid&quot;, 
+           size = 7/.pt) +
+  annotate(&quot;text&quot;, x = 1200, y = 0.925, 
+           label = &quot;Core immersed\nin bead bath&quot;, 
+           size = 7/.pt) +
+  theme_tidy()
+
+p3 &lt;- dfluid %&gt;%
+  mutate(left = (1-quenched) * cells) %&gt;%
+  ggplot(aes(depth, left)) +
+  geom_point() +
+  geom_vline(xintercept = 750, linetype = &quot;dotted&quot;) +
+  labs(x = &quot;Core depth (m)&quot;, y = expression(&quot;Cells left from drilling fluid (ml&quot;^&quot;-1&quot;*&quot;)&quot;)) +
+  theme_tidy()</code></pre>
+<pre class="r"><code>library(patchwork)
+p1 + p2 + p3 + plot_annotation(tag_levels = c(&quot;a&quot;,&quot;b&quot;,&quot;c&quot;)) &amp; 
+  theme(plot.tag.position = &quot;top&quot;)</code></pre>
+<p><img src="fractures_files/figure-html/plot%20contamination%20figure-1.png" width="683.00395256917" /></p>
+<pre class="r"><code>ggsave(&quot;figures/mudpit.pdf&quot;, height = 10, width = 18, units = &quot;cm&quot;)</code></pre>
+</div>
+<div id="fig.-3" class="section level1" number="3">
+<h1><span class="header-section-number">3</span> Fig. 3</h1>
 <pre class="r"><code>set.seed(999)
 nmds &lt;- seqtab %&gt;% # Full size fraction
   select(seqid, sample, count) %&gt;% spread(seqid, count, fill = 0) %&gt;%
   column_to_rownames(&quot;sample&quot;) %&gt;% vegan::metaMDS()</code></pre>
 <pre><code>## Square root transformation
 ## Wisconsin double standardization
-## Run 0 stress 0.07422246 
-## Run 1 stress 0.1017096 
-## Run 2 stress 0.1017096 
-## Run 3 stress 0.07422231 
+## Run 0 stress 0.09981199 
+## Run 1 stress 0.08710122 
 ## ... New best solution
-## ... Procrustes: rmse 0.0002783448  max resid 0.0004238785 
+## ... Procrustes: rmse 0.05542713  max resid 0.1562921 
+## Run 2 stress 0.08766516 
+## Run 3 stress 0.08710122 
+## ... New best solution
+## ... Procrustes: rmse 2.252692e-06  max resid 5.062907e-06 
 ## ... Similar to previous best
-## Run 4 stress 0.1017096 
-## Run 5 stress 0.1039267 
-## Run 6 stress 0.118446 
-## Run 7 stress 0.07422252 
-## ... Procrustes: rmse 0.0003180668  max resid 0.0004852803 
+## Run 4 stress 0.08292077 
+## ... New best solution
+## ... Procrustes: rmse 0.1382421  max resid 0.3856189 
+## Run 5 stress 0.08710122 
+## Run 6 stress 0.08766516 
+## Run 7 stress 0.1007183 
+## Run 8 stress 0.09981208 
+## Run 9 stress 0.08292079 
+## ... Procrustes: rmse 4.127992e-05  max resid 0.00011431 
 ## ... Similar to previous best
-## Run 8 stress 0.1039267 
-## Run 9 stress 0.09213516 
-## Run 10 stress 0.08488414 
-## Run 11 stress 0.1017096 
-## Run 12 stress 0.08609704 
-## Run 13 stress 0.07422238 
-## ... Procrustes: rmse 0.0001941694  max resid 0.0002941457 
+## Run 10 stress 0.08710122 
+## Run 11 stress 0.08766517 
+## Run 12 stress 0.09981201 
+## Run 13 stress 0.08710122 
+## Run 14 stress 0.08710122 
+## Run 15 stress 0.08410533 
+## Run 16 stress 0.09981205 
+## Run 17 stress 0.08766516 
+## Run 18 stress 0.08292077 
+## ... New best solution
+## ... Procrustes: rmse 2.24765e-05  max resid 6.188165e-05 
 ## ... Similar to previous best
-## Run 14 stress 0.08488415 
-## Run 15 stress 0.1039267 
-## Run 16 stress 0.08488415 
-## Run 17 stress 0.07422251 
-## ... Procrustes: rmse 0.0003001155  max resid 0.0004524951 
-## ... Similar to previous best
-## Run 18 stress 0.07422241 
-## ... Procrustes: rmse 0.0002357616  max resid 0.0003597089 
-## ... Similar to previous best
-## Run 19 stress 0.07422249 
-## ... Procrustes: rmse 0.0001846468  max resid 0.0002765153 
-## ... Similar to previous best
-## Run 20 stress 0.07422247 
-## ... Procrustes: rmse 0.0002033185  max resid 0.0003003446 
-## ... Similar to previous best
-## *** Best solution repeated 7 times</code></pre>
+## Run 19 stress 0.08710122 
+## Run 20 stress 0.08710122 
+## *** Best solution repeated 1 times</code></pre>
 <pre><code>## Warning in postMDS(out$points, dis, plot = max(0, plot - 1), ...): skipping
 ## half-change scaling: too few points below threshold</code></pre>
 <pre class="r"><code>vegan::scores(nmds)$sites %&gt;%
@@ -397,74 +612,59 @@ nmds &lt;- seqtab %&gt;% # Full size fraction
   geom_vline(xintercept = 0, linetype = &#39;dotted&#39;) +
   geom_hline(yintercept = 0, linetype = &#39;dotted&#39;) +
   # Points for samples, coloured by nature
-  geom_point(size = 3, stroke = 1) +
+  geom_point(size = 3) +
   theme_tidy() +
-  scale_shape(guide = &quot;none&quot;) +
   ggrepel::geom_label_repel(aes(label = depth), color = &quot;black&quot;,
                   box.padding = 0.4, label.padding = 0.1, 
                   max.overlaps = 10,
                   min.segment.length = 0.3,
                   size = 7/.pt) +
-  scale_shape_manual(values = c(&quot;fracture&quot; = 17, &quot;fluid&quot; = 19), 
+ scale_shape_manual(values = c(&quot;fracture&quot; = 17, &quot;fluid&quot; = 19, &quot;control&quot; = 4), 
                      name = &quot;&quot;, guide = &quot;none&quot;,
-                     labels = c(&quot;Fracture&quot;, &quot;Drilling fluid&quot;)) +
+                     labels = c(&quot;Fracture&quot;, &quot;Drilling fluid&quot;, &quot;Neg. control&quot;)) +
   annotate(&#39;text&#39;, x = -Inf, y = -Inf, size = 7/.pt, 
            label = paste(&#39;Stress = &#39;, round(nmds$stress, digits = 2)),
            hjust = -0.1, vjust = -1,
            )</code></pre>
-<pre><code>## Scale for shape is already present.
-## Adding another scale for shape, which will replace the existing scale.</code></pre>
 <pre class="r"><code>set.seed(999)
 nmds &lt;- fractures %&gt;% select(-relab) %&gt;%
   spread(seqid, count, fill = 0) %&gt;%
   column_to_rownames(&quot;sample&quot;) %&gt;% vegan::metaMDS()</code></pre>
 <pre><code>## Square root transformation
 ## Wisconsin double standardization
-## Run 0 stress 0.1432532 
-## Run 1 stress 0.1665033 
-## Run 2 stress 0.1430038 
+## Run 0 stress 0.1504249 
+## Run 1 stress 0.1647685 
+## Run 2 stress 0.1502089 
 ## ... New best solution
-## ... Procrustes: rmse 0.04474644  max resid 0.1197041 
-## Run 3 stress 0.1432531 
-## ... Procrustes: rmse 0.04471431  max resid 0.1192202 
-## Run 4 stress 0.1353275 
+## ... Procrustes: rmse 0.07292593  max resid 0.150422 
+## Run 3 stress 0.1441969 
 ## ... New best solution
-## ... Procrustes: rmse 0.07460989  max resid 0.1815606 
-## Run 5 stress 0.1777926 
-## Run 6 stress 0.1318923 
+## ... Procrustes: rmse 0.1600446  max resid 0.4409925 
+## Run 4 stress 0.152973 
+## Run 5 stress 0.1504056 
+## Run 6 stress 0.1502089 
+## Run 7 stress 0.1502089 
+## Run 8 stress 0.1497156 
+## Run 9 stress 0.1497157 
+## Run 10 stress 0.1502089 
+## Run 11 stress 0.1540239 
+## Run 12 stress 0.152973 
+## Run 13 stress 0.184572 
+## Run 14 stress 0.1441258 
 ## ... New best solution
-## ... Procrustes: rmse 0.1778754  max resid 0.4670778 
-## Run 7 stress 0.1318923 
-## ... New best solution
-## ... Procrustes: rmse 8.443731e-05  max resid 0.0002056049 
+## ... Procrustes: rmse 0.007209483  max resid 0.02258386 
+## Run 15 stress 0.1504249 
+## Run 16 stress 0.1441258 
+## ... Procrustes: rmse 0.0005031833  max resid 0.001566927 
 ## ... Similar to previous best
-## Run 8 stress 0.1318923 
+## Run 17 stress 0.1441257 
 ## ... New best solution
-## ... Procrustes: rmse 5.434389e-05  max resid 0.0001105173 
+## ... Procrustes: rmse 4.312946e-05  max resid 0.0001238613 
 ## ... Similar to previous best
-## Run 9 stress 0.1318923 
-## ... New best solution
-## ... Procrustes: rmse 3.422217e-05  max resid 9.006363e-05 
-## ... Similar to previous best
-## Run 10 stress 0.1318923 
-## ... Procrustes: rmse 4.003271e-05  max resid 8.498731e-05 
-## ... Similar to previous best
-## Run 11 stress 0.1318923 
-## ... New best solution
-## ... Procrustes: rmse 8.135435e-06  max resid 1.711216e-05 
-## ... Similar to previous best
-## Run 12 stress 0.2155717 
-## Run 13 stress 0.1682544 
-## Run 14 stress 0.1777921 
-## Run 15 stress 0.1353274 
-## Run 16 stress 0.1430038 
-## Run 17 stress 0.1353274 
-## Run 18 stress 0.1430038 
-## Run 19 stress 0.1353275 
-## Run 20 stress 0.1318924 
-## ... Procrustes: rmse 0.0001515256  max resid 0.0004060498 
-## ... Similar to previous best
-## *** Best solution repeated 2 times</code></pre>
+## Run 18 stress 0.152973 
+## Run 19 stress 0.1538145 
+## Run 20 stress 0.152973 
+## *** Best solution repeated 1 times</code></pre>
 <pre><code>## Warning in postMDS(out$points, dis, plot = max(0, plot - 1), ...): skipping
 ## half-change scaling: too few points below threshold</code></pre>
 <pre class="r"><code>nmds.scores &lt;- vegan::scores(nmds)$sites %&gt;%
@@ -476,7 +676,7 @@ nmds &lt;- fractures %&gt;% select(-relab) %&gt;%
   geom_vline(xintercept = 0, linetype = &#39;dotted&#39;) +
   geom_hline(yintercept = 0, linetype = &#39;dotted&#39;) +
   stat_ellipse(aes(x = NMDS1, y = NMDS2, colour = type), 
-               geom = &quot;polygon&quot;, show.legend = F,
+               geom = &quot;polygon&quot;, show.legend = F, level = 0.85,
                fill = NA, linetype = &quot;dashed&quot;) +  
   # Points for samples, coloured by nature
   geom_point(size = 3) +
@@ -486,22 +686,23 @@ nmds &lt;- fractures %&gt;% select(-relab) %&gt;%
                   max.overlaps = 10,
                   min.segment.length = 0.3,
                   size = 7/.pt) +
-  scale_shape_manual(values = c(&quot;fracture&quot; = 17, &quot;fluid&quot; = 19), 
+  scale_shape_manual(values = c(&quot;fracture&quot; = 17, &quot;fluid&quot; = 19, &quot;control&quot; = 4), 
                      name = &quot;&quot;,
-                     labels = c(&quot;Fracture&quot;, &quot;Drilling fluid&quot;)) +
-  scale_color_manual(values = c(fracture = &quot;#00A08A&quot;, fluid = &quot;#D8B70A&quot;), guide = &quot;none&quot;) +
+                     labels = c(&quot;Fracture&quot;, &quot;Drilling fluid&quot;, &quot;Neg. control&quot;)) +
+  scale_color_manual(values = c(fracture = &quot;#D69C4E&quot;, fluid = &quot;#A2A475&quot;), guide = &quot;none&quot;) +
   annotate(&#39;text&#39;, x = -Inf, y = -Inf, size = 7/.pt, 
            label = paste(&#39;Stress = &#39;, round(nmds$stress, digits = 2)),
            hjust = -0.1, vjust = -1,
            ) +
   theme(axis.title.y = element_blank())</code></pre>
 <pre class="r"><code>library(patchwork)
-p1 + p2 + plot_layout(guides = &quot;collect&quot;) &amp; theme(legend.position = &quot;bottom&quot;)</code></pre>
-<p><img src="fractures_files/figure-html/merge%20ordination%20plots-1.png" width="672" /></p>
-<pre class="r"><code>ggsave(&quot;nmds_fractures.pdf&quot;, width = 17, height = 8, units = &quot;cm&quot;)</code></pre>
-<pre class="r"><code>i &lt;- paste(&quot;P28309_10&quot;, 
-           c(&quot;50&quot;,&quot;51&quot;,&quot;52&quot;,&quot;53&quot;,&quot;54&quot;,&quot;55&quot;,&quot;56&quot;,&quot;42&quot;,&quot;43&quot;,&quot;44&quot;,&quot;46&quot;,&quot;47&quot;,&quot;48&quot;),
-           sep = &quot;&quot;)
+p1 + p2 + plot_layout(guides = &quot;collect&quot;) &amp; 
+  theme(legend.position = &quot;bottom&quot;)</code></pre>
+<pre><code>## Too few points to calculate an ellipse</code></pre>
+<p><img src="fractures_files/figure-html/merge%20ordination%20plots-1.png" width="683.00395256917" /></p>
+<pre class="r"><code>ggsave(&quot;figures/nmds.pdf&quot;, width = 17, height = 10, units = &quot;cm&quot;)</code></pre>
+<pre><code>## Too few points to calculate an ellipse</code></pre>
+<pre class="r"><code>i &lt;- meta %&gt;% pull(sample)
 
 fractures %&gt;%
   inner_join(gtdb, by = &quot;seqid&quot;) %&gt;%
@@ -537,9 +738,11 @@ gtdb %&gt;%
   scale_fill_manual(values = cols.order) +
   annotate(&quot;segment&quot;, x =  0.55, xend =   7.45, y = 101, yend = 101) +
   annotate(&quot;segment&quot;, x =  7.55, xend =  13.45, y = 101, yend = 101) +
+  annotate(&quot;segment&quot;, x = 13.55, xend =  15.45, y = 101, yend = 101) +
   annotate(&#39;text&#39;, x =  3.95, y = 104, size = 7 / .pt, label = &quot;Fractures&quot;) +
   annotate(&#39;text&#39;, x = 10.45, y = 104, size = 7 / .pt, label = &quot;Drilling fluid&quot;) +
-  theme_tidy(ratio = 0.7) + 
+  annotate(&#39;text&#39;, x = 14.45, y = 104, size = 7 / .pt, label = &quot;Neg. controls&quot;) +
+  theme_tidy(ratio = 0.8, legend = &quot;bottom&quot;) + guides(fill = guide_legend(ncol = 3)) +
   theme(
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank(),
@@ -547,7 +750,115 @@ gtdb %&gt;%
     legend.margin = margin(0,0,0,-4)
     )</code></pre>
 <p><img src="fractures_files/figure-html/plot%20communities%20order-1.png" width="672" /></p>
-<pre class="r"><code>ggsave(&quot;cosc_fractures.pdf&quot;, width = 14, height = 8, units = &quot;cm&quot;)</code></pre>
+<pre class="r"><code>ggsave(&quot;figures/barplot_order.pdf&quot;, width = 12, height = 12, units = &quot;cm&quot;)</code></pre>
+<pre class="r"><code>seqtab %&gt;%
+  inner_join(meta[,c(&quot;sample&quot;,&quot;type&quot;)], by = &quot;sample&quot;) %&gt;% 
+  spread(seqid, count, fill = 0) %&gt;%
+  column_to_rownames(&quot;sample&quot;) -&gt; t
+
+set.seed(999)
+vegan::adonis2(t[,c(-1)] ~ type, data = t)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Df"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["SumOfSqs"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["R2"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["F"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[5],"type":["dbl"],"align":["right"]}],"data":[{"1":"2","2":"1.321394","3":"0.2823236","4":"2.360314","5":"0.012","_rn_":"type"},{"1":"12","2":"3.359029","3":"0.7176764","4":"NA","5":"NA","_rn_":"Residual"},{"1":"14","2":"4.680424","3":"1.0000000","4":"NA","5":"NA","_rn_":"Total"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code>fractures %&gt;%
+  select(-relab) %&gt;%
+  inner_join(meta[,c(&quot;sample&quot;,&quot;type&quot;)], by = &quot;sample&quot;) %&gt;% 
+  spread(seqid, count, fill = 0) %&gt;%
+  column_to_rownames(&quot;sample&quot;) -&gt; t
+
+set.seed(111)
+vegan::adonis2(t[,c(-1)] ~ type, data = t)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Df"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["SumOfSqs"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["R2"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["F"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[5],"type":["dbl"],"align":["right"]}],"data":[{"1":"2","2":"2.068453","3":"0.3501363","4":"3.232705","5":"0.002","_rn_":"type"},{"1":"12","2":"3.839113","3":"0.6498637","4":"NA","5":"NA","_rn_":"Residual"},{"1":"14","2":"5.907566","3":"1.0000000","4":"NA","5":"NA","_rn_":"Total"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+</div>
+<div id="fig.-4" class="section level1" number="4">
+<h1><span class="header-section-number">4</span> Fig. 4</h1>
+<p>Workflow based on: <a href="https://cran.r-project.org/web/packages/phangorn/vignettes/Trees.html" class="uri">https://cran.r-project.org/web/packages/phangorn/vignettes/Trees.html</a></p>
+<pre class="r"><code>t &lt;- c(&quot;Desulforudis&quot;,&quot;Hydrogenophaga&quot;,&quot;Sulfuricurvum&quot;,&quot;Sulfurimonas&quot;,&quot;Methanothrix&quot;,
+       &quot;Desulfitibacter&quot;,&quot;Desulfatitalea&quot;,&quot;Geomonas&quot;,&quot;Thiobacillus&quot;,&quot;Sulfurospirillum&quot;,&quot;Pseudodesulfovibrio&quot;)
+
+# Campylobacterota: Sulfuricurvum, Sulfurospirillum, Sulfurimonas
+# Gammaproteobacteria: Thiobacillus, Hydrogenophaga
+# Desulfobacterota: Geomonas, Pseudodesulfovibrio, Desulfatitalea
+# Firmicutes: Desulforidis
+
+
+out &lt;- list(sequence = gtdb %&gt;% filter(seqid == &quot;53de0ce467c0b56b342344f6e5bbd392&quot;) %&gt;% pull(sequence),
+            genus = &quot;Anstonella&quot;, relab = 0.0)
+
+tree &lt;- fractures %&gt;%
+  # Leave out the samples from the drilling fluid and the controls
+  inner_join(meta, by = &quot;sample&quot;) %&gt;% filter(type == &quot;fracture&quot;) %&gt;%
+  inner_join(gtdb, by = &quot;seqid&quot;) %&gt;%
+  # Compute relative abundance for each ASV
+  mutate(relab = count / sum(count)) %&gt;%
+  filter(genus %in% t) %&gt;%
+  # Add outgroup
+  select(sequence, genus, relab) %&gt;%
+  rbind(out) %&gt;%
+  # Ensure all sequences have identical length
+  mutate(sequence = substr(sequence, 1, 402)) %&gt;%
+  group_by(sequence) %&gt;% mutate(relab = sum(relab)) %&gt;% slice_sample(n = 1) %&gt;% ungroup() %&gt;%
+  # Hydrogenophaga is dominating the tree, select five most abundant
+  group_by(genus) %&gt;% slice_max(relab, n = 5) %&gt;% ungroup() %&gt;%
+  # Round the abundance
+  mutate(relab = round(relab, digits = 6)) %&gt;%
+  # Create a unique tip label
+  mutate(label = paste(genus, relab)) %&gt;% group_by(label) %&gt;% slice_sample(n = 1) %&gt;% ungroup()
+
+seqinr::write.fasta(as.list(tree$sequence), file.out = &quot;data/subsurface.fa&quot;, names = tree$label)
+i &lt;- ape::read.dna(&quot;data/subsurface.fa&quot;, format = &quot;fasta&quot;)
+subsurface &lt;- phangorn::phyDat(i)</code></pre>
+<pre class="r"><code>library(phangorn)</code></pre>
+<pre><code>## Loading required package: ape</code></pre>
+<pre><code>## 
+## Attaching package: &#39;ape&#39;</code></pre>
+<pre><code>## The following object is masked from &#39;package:dplyr&#39;:
+## 
+##     where</code></pre>
+<pre class="r"><code>mt &lt;- modelTest(subsurface, model=c(&quot;JC&quot;, &quot;F81&quot;, &quot;K80&quot;, &quot;HKY&quot;, &quot;SYM&quot;, &quot;GTR&quot;))</code></pre>
+<pre><code>## Model        df  logLik   AIC      BIC
+##           JC 39 -4127.841 8333.682 8489.544 
+##         JC+I 40 -4106.043 8292.085 8451.943 
+##      JC+G(4) 40 -4060.589 8201.179 8361.037 
+##    JC+G(4)+I 41 -4060.074 8202.148 8366.003 
+##          F81 42 -4104.241 8292.483 8460.334 
+##        F81+I 43 -4082.136 8250.272 8422.119 
+##     F81+G(4) 43 -4036.268 8158.535 8330.383 
+##   F81+G(4)+I 44 -4035.674 8159.347 8335.191 
+##          K80 40 -4116.879 8313.759 8473.617 
+##        K80+I 41 -4093.727 8269.454 8433.308 
+##     K80+G(4) 41 -4049.11 8180.22 8344.075 
+##   K80+G(4)+I 42 -4048.353 8180.706 8348.557 
+##          HKY 43 -4096.389 8278.779 8450.626 
+##        HKY+I 44 -4072.314 8232.629 8408.472 
+##     HKY+G(4) 44 -4026.956 8141.913 8317.757 
+##   HKY+G(4)+I 45 -4026.067 8142.134 8321.975 
+##          SYM 44 -4110.316 8308.632 8484.476 
+##        SYM+I 45 -4087.031 8264.062 8443.903 
+##     SYM+G(4) 45 -4044.783 8179.566 8359.406 
+##   SYM+G(4)+I 46 -4043.884 8179.769 8363.606 
+##          GTR 47 -4084.385 8262.769 8450.602 
+##        GTR+I 48 -4061.183 8218.365 8410.195 
+##     GTR+G(4) 48 -4018.447 8132.894 8324.724 
+##   GTR+G(4)+I 49 -4017.269 8132.538 8328.364</code></pre>
+<pre class="r"><code># GTR+G(4)+I lowest AIC
+
+fit &lt;- as.pml(mt, &quot;GTR+G(4)+I&quot;)
+fit_mt &lt;- pml_bb(mt, control = pml.control(trace = 0))
+bs &lt;- bootstrap.pml(fit_mt, bs=100, optNni=TRUE, control = pml.control(trace = 0))
+plotBS(midpoint(fit_mt$tree), bs, p = 50, type=&quot;p&quot;, main=&quot;Standard bootstrap&quot;)</code></pre>
+<p><img src="fractures_files/figure-html/build%20and%20plot%20phylogeny%20(ML)-1.png" width="672" /></p>
+<pre class="r"><code>tree_stdbs &lt;- plotBS(fit_mt$tree, bs, type = &quot;n&quot;)
+ape::write.tree(tree_stdbs, &quot;data/subsurface.tree&quot;)
+remove(tree, out, subsurface, mt, fit, fit_mt, bs, tree_stdbs)</code></pre>
+</div>
 
 
 

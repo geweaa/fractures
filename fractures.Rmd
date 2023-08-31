@@ -1,6 +1,6 @@
 ---
-title: "fractures"
-author: "George"
+title: "Continental scientific drilling and microbiology: (extremely) low biomass in crystalline bedrock of central Sweden"
+author: "George Westmeijer"
 date: "2023-03-17"
 output:
   bookdown::html_document2:
@@ -18,6 +18,7 @@ output:
 ---
 
 ```{r set-up}
+knitr::opts_chunk$set(cache = TRUE)
 library(tidyverse)
 source("../../Protocols/theme.R")
 
@@ -88,6 +89,7 @@ seqtab <- seqtab %>%
 # Biofilm 3 and 4 share the mud pit sample
 fractures <- seqtab %>%
   # Start with removing the ASVs in the negative extraction controls
+  filter(!seqid %in% ncontrol) %>%
   # Removal of ASVs from drilling fluid (pairwise)
   filter(
     sample %in% c("P28309_1050","P28309_1051") & !seqid %in% seqtab[seqtab$sample == "P28309_1042",]$seqid |
@@ -113,21 +115,19 @@ dfluid <- read_tsv("data/contamination.tsv", col_types = cols(.default = col_dou
 
 # Add drilling fluid samples
 fractures <- seqtab %>%
-  filter(!seqid %in% ncontrol) %>% # Remove ASVs from the negative extraction control
   inner_join(meta, by = "sample") %>%
   filter(type == "fluid") %>% select(seqid, sample, count) %>%
   rbind(fractures) %>%
-  rbind(ncontrol)
-
-# Add relative abundance
-fractures <- fractures %>%
+  rbind(ncontrol) %>%
+  # Add relative abundance
   group_by(sample) %>% 
   mutate(relab = count / sum(count)) %>%
   ungroup()
 ```
 
+# Fig. 1
 
-```{r logging}
+```{r read logging data}
 # Read raw data from ICDP
 # https://www.icdp-online.org/projects/by-continent/europe/cosc-sweden
 # Cite the operational data sets
@@ -148,14 +148,147 @@ logging <- logging %>%
     depth > 1600 & depth <= 1930 ~ "Dolerite",
     .default = "Ignimbrites + volcanic porphyries"
   ))
-
-lithology <- list(depth = c(780, 45, 425, 350, 330, 346),
-                  rock = c("Turbiditic greywackes", "Alum shale",
-                  "Imbricates: sandstone + conglomerate", "Ignimbrite + porphyry",
-                  "Dolerite", "Ignimbrites + volcanic porphyries"))
 ```
 
-### Fig. 3 ###
+```{r plot depth profile}
+p1 <- logging %>%
+  mutate(depth = depth / 1000) %>% # Depth in km
+  ggplot(aes(temp, depth)) +
+  geom_line() + 
+  scale_y_reverse(breaks = c(0, 0.5, 1, 1.5, 2, 2.273), labels = c("0","0.5","1.0","1.5","2.0","2.273")) + 
+  scale_x_continuous(position = "top") +
+  labs(x = "Temperature (°C)", y = "Depth (km)") +
+  theme_tidy(ratio = 2.5) +
+  theme(
+    axis.ticks.y = element_blank(),
+    panel.border = element_blank(),
+    axis.line = element_line(),
+    panel.grid.major.y = element_line(colour = "grey", linetype = "dotted", linewidth = 0.4)
+  )
+```
+
+
+```{r plot lithology}
+i <- list(start = 0.6, end = 1.5, depth = c(.176,.953,1.268,1.270,1.311,1.448,1.537,
+                                       1.549,1.602,1.670,1.686,1.746,1.780,1.799,
+                                       1.800,1.819,1.849)) %>% data.frame()
+
+lithology <- list(depth = c(780, 45, 425, 350, 330, 346), type = "Lithology",
+                  rock = c("Turbiditic greywackes", "Alum shale",
+                           "Imbricates: sandstone + conglomerate", "Ignimbrite + porphyry",
+                           "Dolerite", "Ignimbrites + volcanic porphyries")
+                  ) %>% data.frame()
+
+p2 <- lithology %>%
+  mutate(depth = depth / 1000) %>% # Depth in km
+  mutate(rock = factor(rock, rev(names(cols.rock)))) %>%
+  ggplot(aes(type, depth, fill = rock)) +
+  geom_col() + scale_y_reverse() + scale_x_discrete(position = "top") +
+  labs(x = "Lithology", y = "", fill = "") +
+  theme_tidy(ratio = 6) + 
+  guides(fill = guide_legend(reverse = T)) +
+  scale_fill_manual(values = cols.rock) +
+  geom_segment(data = i, aes(x = start, xend = end, y = depth, yend = depth), inherit.aes = F) +
+  theme(
+    panel.border = element_blank(),
+    axis.line.x = element_line(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+    )
+```
+
+
+```{r plot scandinavia}
+# Äspö Lat N 57.4334, Lon E 16.6603) 
+baltic <- list.files("../../Cultures/didactic-spork/data/shapefiles/", pattern = ".shp", full.names = TRUE) %>% lapply(sf::st_read)
+# Use EPSG 3152, unit (m)
+baltic[[3]] <- baltic[[3]] %>% sf::st_transform(3152)
+baltic[[6]] <- baltic[[6]] %>% sf::st_transform(3152)
+baltic[[7]] <- baltic[[7]] %>% sf::st_transform(3152)
+
+ggplot() + # x (longitude), y (latitude)
+  geom_sf(data = baltic[[3]], colour = "black", fill = "white", lwd = 0.08) + # Finland
+  geom_sf(data = baltic[[6]], colour = "black", fill = "white", lwd = 0.08) + # Norway
+  geom_sf(data = baltic[[7]], colour = "black", fill = "white", lwd = 0.08) + # Sweden
+  ggspatial::annotation_scale(location = "br") +
+  annotate("rect", xmin = -126780 - 20000, xmax = -126780 + 20000, ymin = 530561 - 20000, ymax = 530561 + 20000, fill = "black" 
+           ) +
+  annotate("text", x = -126780 + 110000, y = 530561, label = "COSC-2", colour = "black", size = 7/.pt) +
+  lims(x = c(-605927, 377430), y = c(-300000, 1172471)) +
+  labs(x = "", y = "") + 
+  theme(
+    panel.grid = element_line(colour = "#D9D9D9", linewidth = 0.4),
+    panel.background = element_blank(),
+    axis.text = element_text(size = 7, color = "black"),
+    axis.ticks = element_blank()
+    )
+```
+
+
+```{r export map}
+ggsave("figures/coscmap.png", width = 8, height = 8, units = "cm")
+```
+
+
+```{r plot fig. 1b}
+library(patchwork)
+p1 + p2 & theme(legend.position = "none")
+```
+
+
+```{r export fig. 1b}
+ggsave("figures/lithology.pdf", width = 8, height = 10, units = "cm")
+```
+
+
+# Fig. 2
+
+```{r, fig.height=8/2.54, fig.width=8/2.54}
+p1 <- dfluid %>%
+  ggplot(aes(depth, cells)) +
+  geom_point() + scale_y_log10() +
+  labs(x = "Core depth (m)", y = expression("Cells in drilling fluid (ml"^"-1"*")")) +
+  theme_tidy()
+
+p2 <- dfluid %>%
+  ggplot(aes(depth, quenched)) +
+  geom_point() +
+  geom_vline(xintercept = 750, linetype = "dotted") +
+  labs(x = "Core depth (m)", y = "Fraction of beads quenced") +
+  annotate("text", x = 350, y = 0.925, 
+           label = "Beads added\nto drilling fluid", 
+           size = 7/.pt) +
+  annotate("text", x = 1200, y = 0.925, 
+           label = "Core immersed\nin bead bath", 
+           size = 7/.pt) +
+  theme_tidy()
+
+p3 <- dfluid %>%
+  mutate(left = (1-quenched) * cells) %>%
+  ggplot(aes(depth, left)) +
+  geom_point() +
+  geom_vline(xintercept = 750, linetype = "dotted") +
+  labs(x = "Core depth (m)", y = expression("Cells left from drilling fluid (ml"^"-1"*")")) +
+  theme_tidy()
+```
+
+
+```{r plot contamination figure, fig.width=18/2.53}
+library(patchwork)
+p1 + p2 + p3 + plot_annotation(tag_levels = c("a","b","c")) & 
+  theme(plot.tag.position = "top")
+```
+
+
+```{r export fig. 2}
+ggsave("figures/mudpit.pdf", height = 10, width = 18, units = "cm")
+```
+
+
+# Fig. 3
 
 
 ```{r nmds fractures unfiltered}
@@ -244,7 +377,7 @@ p1 + p2 + plot_layout(guides = "collect") &
 
 
 ```{r export ordination}
-ggsave("figures/nmds_fractures.pdf", width = 17, height = 10, units = "cm")
+ggsave("figures/nmds.pdf", width = 17, height = 10, units = "cm")
 ```
 
 
@@ -304,7 +437,7 @@ fractures %>%
 
 
 ```{r export bar plot}
-ggsave("figures/cosc_fractures.pdf", width = 12, height = 12, units = "cm")
+ggsave("figures/barplot_order.pdf", width = 12, height = 12, units = "cm")
 ```
 
 
@@ -329,134 +462,65 @@ vegan::adonis2(t[,c(-1)] ~ type, data = t)
 ```
 
 
-### Fig. 1 ###
+# Fig. 4
+
+Workflow based on: https://cran.r-project.org/web/packages/phangorn/vignettes/Trees.html
 
 
-```{r plot depth profile}
-p1 <- logging %>%
-  mutate(depth = depth / 1000) %>% # Depth in km
-  ggplot(aes(temp, depth)) +
-  geom_line() + scale_y_reverse() + scale_x_continuous(position = "top") +
-  labs(x = "Temperature (°C)", y = "Depth (km)") +
-  theme_tidy(ratio = 2) +
-  theme(
-    panel.border = element_blank(),
-    axis.line = element_line(),
-    panel.grid.major.y = element_line(colour = "grey", linetype = "dotted", linewidth = 0.4)
-  )
+```{r prepare data}
+t <- c("Desulforudis","Hydrogenophaga","Sulfuricurvum","Sulfurimonas","Methanothrix",
+       "Desulfitibacter","Desulfatitalea","Geomonas","Thiobacillus","Sulfurospirillum","Pseudodesulfovibrio")
+
+# Campylobacterota: Sulfuricurvum, Sulfurospirillum, Sulfurimonas
+# Gammaproteobacteria: Thiobacillus, Hydrogenophaga
+# Desulfobacterota: Geomonas, Pseudodesulfovibrio, Desulfatitalea
+# Firmicutes: Desulforidis
+
+
+out <- list(sequence = gtdb %>% filter(seqid == "53de0ce467c0b56b342344f6e5bbd392") %>% pull(sequence),
+            genus = "Anstonella", relab = 0.0)
+
+tree <- fractures %>%
+  # Leave out the samples from the drilling fluid and the controls
+  inner_join(meta, by = "sample") %>% filter(type == "fracture") %>%
+  inner_join(gtdb, by = "seqid") %>%
+  # Compute relative abundance for each ASV
+  mutate(relab = count / sum(count)) %>%
+  filter(genus %in% t) %>%
+  # Add outgroup
+  select(sequence, genus, relab) %>%
+  rbind(out) %>%
+  # Ensure all sequences have identical length
+  mutate(sequence = substr(sequence, 1, 402)) %>%
+  group_by(sequence) %>% mutate(relab = sum(relab)) %>% slice_sample(n = 1) %>% ungroup() %>%
+  # Hydrogenophaga is dominating the tree, select five most abundant
+  group_by(genus) %>% slice_max(relab, n = 5) %>% ungroup() %>%
+  # Round the abundance
+  mutate(relab = round(relab, digits = 6)) %>%
+  # Create a unique tip label
+  mutate(label = paste(genus, relab)) %>% group_by(label) %>% slice_sample(n = 1) %>% ungroup()
+
+seqinr::write.fasta(as.list(tree$sequence), file.out = "data/subsurface.fa", names = tree$label)
+i <- ape::read.dna("data/subsurface.fa", format = "fasta")
+subsurface <- phangorn::phyDat(i)
 ```
 
 
-```{r plot lithology}
-p2 <- lithology %>%
-  data.frame() %>%
-  mutate(sample = "hi") %>%
-  mutate(depth = depth / 1000) %>% # Depth in km
-  mutate(rock = factor(rock, rev(names(cols.rock)))) %>%
-  ggplot(aes(sample, depth, fill = rock)) +
-  geom_col() + scale_y_reverse() + scale_x_discrete(position = "top") +
-  labs(x = "Lithology", y = "", fill = "") +
-  theme_tidy(ratio = 6) + 
-  guides(fill = guide_legend(reverse = T)) +
-  scale_fill_manual(values = cols.rock) + 
-  annotate("text", x = 1.5, y = 1.268, label = "-") +
-  annotate("text", x = 1.5, y = 1.270, label = "-") +
-  annotate("text", x = 1.5, y = 1.311, label = "-") +
-  annotate("text", x = 1.5, y = 1.537, label = "-") +
-  annotate("text", x = 1.5, y = 1.605, label = "-") +
-  annotate("text", x = 1.5, y = 1.608, label = "-") +
-  annotate("text", x = 1.5, y = 1.669, label = "-") +
-  theme(
-    panel.border = element_blank(),
-    axis.line.x = element_line(),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank()
-    )
+```{r build and plot phylogeny (ML)}
+library(phangorn)
+mt <- modelTest(subsurface, model=c("JC", "F81", "K80", "HKY", "SYM", "GTR"))
+# GTR+G(4)+I lowest AIC
+
+fit <- as.pml(mt, "GTR+G(4)+I")
+fit_mt <- pml_bb(mt, control = pml.control(trace = 0))
+bs <- bootstrap.pml(fit_mt, bs=100, optNni=TRUE, control = pml.control(trace = 0))
+plotBS(midpoint(fit_mt$tree), bs, p = 50, type="p", main="Standard bootstrap")
 ```
 
 
-```{r plot scandinavia}
-# Äspö Lat N 57.4334, Lon E 16.6603) 
-baltic <- list.files("../../Cultures/didactic-spork/data/shapefiles/", pattern = ".shp", full.names = TRUE) %>% lapply(sf::st_read)
-# Use EPSG 3152, unit (m)
-baltic[[3]] <- baltic[[3]] %>% sf::st_transform(3152)
-baltic[[6]] <- baltic[[6]] %>% sf::st_transform(3152)
-baltic[[7]] <- baltic[[7]] %>% sf::st_transform(3152)
-
-ggplot() + # x (longitude), y (latitude)
-  geom_sf(data = baltic[[3]], colour = "black", fill = "white", lwd = 0.08) + # Finland
-  geom_sf(data = baltic[[6]], colour = "black", fill = "white", lwd = 0.08) + # Norway
-  geom_sf(data = baltic[[7]], colour = "black", fill = "white", lwd = 0.08) + # Sweden
-  ggspatial::annotation_scale(location = "br") +
-  annotate("rect", xmin = -126780 - 20000, xmax = -126780 + 20000, ymin = 530561 - 20000, ymax = 530561 + 20000, fill = "black" 
-           ) +
-  annotate("text", x = -126780 + 110000, y = 530561, label = "COSC-2", colour = "black", size = 7/.pt) +
-  lims(x = c(-605927, 377430), y = c(-300000, 1172471)) +
-  labs(x = "", y = "") + 
-  theme(
-    panel.grid = element_line(colour = "#D9D9D9", linewidth = 0.4),
-    panel.background = element_blank(),
-    axis.text = element_text(size = 7, color = "black"),
-    axis.ticks = element_blank()
-    )
-```
-
-```{r export map}
-ggsave("coscmap.png", width = 8, height = 8, units = "cm")
-```
-
-
-
-```{r plot fig. 1b}
-library(patchwork)
-p1 + p2 & theme(legend.position = "none")
-```
-```{r export fig. 1b}
-ggsave("fig1b.pdf", width = 8, height = 10, units = "cm")
-```
-
-
-### Fig. 2 ###
-
-```{r, fig.height=8/2.54, fig.width=8/2.54}
-p1 <- dfluid %>%
-  ggplot(aes(depth, cells)) +
-  geom_point() + scale_y_log10() +
-  labs(x = "Core depth (m)", y = expression("Cells in drilling fluid (ml"^"-1"*")")) +
-  theme_tidy()
-
-p2 <- dfluid %>%
-  ggplot(aes(depth, quenched)) +
-  geom_point() +
-  geom_vline(xintercept = 750, linetype = "dotted") +
-  labs(x = "Core depth (m)", y = "Fraction of beads quenced") +
-  annotate("text", x = 350, y = 0.925, 
-           label = "Beads added\nto drilling fluid", 
-           size = 7/.pt) +
-  annotate("text", x = 1200, y = 0.925, 
-           label = "Core immersed\nin bead bath", 
-           size = 7/.pt) +
-  theme_tidy()
-
-p3 <- dfluid %>%
-  mutate(left = (1-quenched) * cells) %>%
-  ggplot(aes(depth, left)) +
-  geom_point() +
-  geom_vline(xintercept = 750, linetype = "dotted") +
-  labs(x = "Core depth (m)", y = expression("Cells left from drilling fluid (ml"^"-1"*")")) +
-  theme_tidy()
-```
-
-
-```{r, fig.width=18/2.53}
-library(patchwork)
-p1 + p2 + p3 + plot_annotation(tag_levels = c("a","b","c")) & 
-  theme(plot.tag.position = "top")
-```
-```{r export fig. 2}
-ggsave("figures/mudpit.pdf", height = 14, width = 14, units = "cm")
+```{r export tree}
+tree_stdbs <- plotBS(fit_mt$tree, bs, type = "n")
+ape::write.tree(tree_stdbs, "data/subsurface.tree")
+remove(tree, out, subsurface, mt, fit, fit_mt, bs, tree_stdbs)
 ```
 
