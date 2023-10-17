@@ -150,29 +150,34 @@ logging <- logging %>%
   ))
 ```
 
-```{r plot depth profile}
+```{r plot depth profile, fig.width=10/2.53}
+i <- list(type = "fracture", depth = c(.176,.953,1.268,1.270,1.311,1.448,1.537,
+                                       1.549,1.602,1.670,1.686,1.746,1.780,1.799,
+                                       1.800,1.819,1.849)) %>% data.frame()
+
+
 p1 <- logging %>%
   mutate(depth = depth / 1000) %>% # Depth in km
-  ggplot(aes(temp, depth)) +
-  geom_line() + 
-  scale_y_reverse(breaks = c(0, 0.5, 1, 1.5, 2, 2.273), labels = c("0","0.5","1.0","1.5","2.0","2.273")) + 
+  left_join(i, by = "depth") %>%
+  ggplot(aes(temp, depth, fill = rock)) +
+  geom_line() +
+  geom_point(data = . %>% filter(!is.na(type)), 
+             size = 4, stroke = 1, shape = 21) +
+  scale_y_reverse(breaks = c(0, 0.5, 1, 1.5, 2, 2.273), labels = c("0","0.5","1.0","1.5","2.0","2.273"), expand = c(0.01,0)) + 
   scale_x_continuous(position = "top") +
   labs(x = "Temperature (°C)", y = "Depth (km)") +
-  theme_tidy(ratio = 2.5) +
+  scale_fill_manual(values = cols.rock, guide = "none") +
+  theme_tidy(ratio = 2) +
   theme(
-    axis.ticks.y = element_blank(),
+    axis.ticks.x = element_blank(),
     panel.border = element_blank(),
     axis.line = element_line(),
-    panel.grid.major.y = element_line(colour = "grey", linetype = "dotted", linewidth = 0.4)
+    panel.grid.major.x = element_line(colour = "grey", linetype = "dotted", linewidth = 0.4)
   )
 ```
 
 
 ```{r plot lithology}
-i <- list(start = 0.6, end = 1.5, depth = c(.176,.953,1.268,1.270,1.311,1.448,1.537,
-                                       1.549,1.602,1.670,1.686,1.746,1.780,1.799,
-                                       1.800,1.819,1.849)) %>% data.frame()
-
 lithology <- list(depth = c(780, 45, 425, 350, 330, 346), type = "Lithology",
                   rock = c("Turbiditic greywackes", "Alum shale",
                            "Imbricates: sandstone + conglomerate", "Ignimbrite + porphyry",
@@ -188,7 +193,6 @@ p2 <- lithology %>%
   theme_tidy(ratio = 6) + 
   guides(fill = guide_legend(reverse = T)) +
   scale_fill_manual(values = cols.rock) +
-  geom_segment(data = i, aes(x = start, xend = end, y = depth, yend = depth), inherit.aes = F) +
   theme(
     panel.border = element_blank(),
     axis.line.x = element_line(),
@@ -385,13 +389,14 @@ ggsave("figures/nmds.pdf", width = 17, height = 10, units = "cm")
 i <- meta %>% pull(sample)
 
 fractures %>%
+  inner_join(meta, by = "sample") %>% filter(type == "fracture") %>%
   inner_join(gtdb, by = "seqid") %>%
-  group_by(order, sample) %>%
+  group_by(genus, sample) %>%
   # Sum the abundance of each phylum within a sample
   summarise(relab = sum(relab), .groups = 'drop_last') %>%
   # Calculate the mean abundance of each phylum over the categories
   summarise(mean_relab = sum(relab), .groups = 'drop') %>%
-  filter(!is.na(order)) %>%
+  filter(!is.na(genus)) %>%
   top_n(9, mean_relab) -> t
 
 gtdb %>%
